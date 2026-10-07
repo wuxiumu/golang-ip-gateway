@@ -1,0 +1,14 @@
+# Go
+ip-gateway
+ip-gateway-linux-*
+*.test
+*.out
+
+# React 管理后台
+admin-ui/node_modules/
+admin-ui/dist/
+
+# 系统/编辑器
+.DS_Store
+*.log
+logs/

@@ -1,0 +1,13 @@
+[Unit]
+Description=ip-gateway
+After=network.target
+
+[Service]
+WorkingDirectory=/www/ipgateway
+ExecStart=/www/ipgateway/ip-gateway -config /www/ipgateway/config.yaml
+Restart=always
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
