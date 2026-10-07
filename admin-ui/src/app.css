@@ -575,6 +575,188 @@ input.mid {
   color: #7d8db8;
 }
 
+/* ===== 页面导航与模式互斥 ===== */
+
+.page-tabs {
+  margin-bottom: 16px;
+}
+
+.live-badge {
+  font-size: 10px;
+  color: #fff;
+  background: #2eb872;
+  border-radius: 8px;
+  padding: 1px 7px;
+  font-weight: 400;
+}
+
+.mode-switch-hint {
+  padding: 10px 2px 2px;
+  color: #b8860b;
+  font-size: 12.5px;
+}
+
+/* ===== 演示三件套 ===== */
+
+.demo-btns {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #e3e8f0;
+}
+
+.demo-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.demo-table th,
+.demo-table td {
+  padding: 8px 10px;
+  font-size: 13px;
+  text-align: left;
+  border-bottom: 1px solid #eef1f6;
+}
+
+.demo-table th {
+  color: #67718a;
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.demo-table tr:last-child td {
+  border-bottom: none;
+}
+
+.weight-input {
+  width: 74px;
+  flex: none;
+  text-align: center;
+}
+
+.weight-pct {
+  width: 44px;
+  flex: none;
+  font-size: 12px;
+  color: #35509c;
+  text-align: right;
+}
+
+.kw-input {
+  width: 180px;
+  flex: none;
+}
+
+.arrow {
+  color: #98a1b3;
+  flex: none;
+}
+
+/* ===== 流量统计 ===== */
+
+.stats-card .stats-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.stats-card h2 {
+  margin: 0;
+}
+
+.stat-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stat-name {
+  width: 240px;
+  flex: none;
+  font-size: 12px;
+  color: #4a5570;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stat-track {
+  flex: 1;
+  height: 16px;
+  background: #eef1f6;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.stat-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4c7dff, #7aa5ff);
+  border-radius: 8px;
+  min-width: 2px;
+}
+
+.stat-num {
+  width: 70px;
+  flex: none;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+  color: #35509c;
+}
+
+.hour-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 80px;
+  margin-top: 6px;
+}
+
+.hour-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  height: 100%;
+  gap: 3px;
+}
+
+.hour-fill {
+  width: 100%;
+  min-height: 2px;
+  background: #7aa5ff;
+  border-radius: 3px 3px 0 0;
+}
+
+.hour-label {
+  font-size: 10px;
+  color: #98a1b3;
+  white-space: nowrap;
+}
+
+.btn-danger-ghost {
+  color: #d64545;
+  border-color: #f0b4b4;
+}
+
+.btn-danger-ghost:hover {
+  background: #fdf0f0;
+  color: #d64545;
+  border-color: #d64545;
+}
+
 .footer {
   text-align: center;
   font-size: 12px;

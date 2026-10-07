@@ -12,34 +12,4 @@ redis:
     password: ""
     db: 0
     key: ip_gateway:rules
-rules:
-    - id: r0341e8da
-      type: segment
-      ip_cidr: 10.0.0.0/8
-      target: ""
-      targets:
-        - https://s1.example.com
-        - https://s2.example.com
-        - https://s3.example.com
-        - https://s4.example.com
-        - https://s5.example.com
-      enable: true
-      weight: 0
-      ua_contains: ""
-      path_prefix: ""
-      country: ""
-      remark: 【例2·分段】10开头IP三等分：第1段s1/第2段s2/第3段s3
-    - id: r8a48c7a2
-      type: random
-      ip_cidr: 0.0.0.0/0
-      target: ""
-      targets:
-        - https://r1.example.com
-        - https://r2.example.com
-        - https://r3.example.com
-      enable: true
-      weight: 0
-      ua_contains: ""
-      path_prefix: ""
-      country: ""
-      remark: 【例3·随机】这段IP随机分s选一个域名，同一IP永远固定不变
+rules: []

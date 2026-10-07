@@ -4,6 +4,9 @@ ip-gateway-linux-*
 *.test
 *.out
 
+# 运行时数据（统计落盘）
+stats.json
+
 # React 管理后台
 admin-ui/node_modules/
 admin-ui/dist/

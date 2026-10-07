@@ -106,6 +106,17 @@ if [ -z "$READY" ]; then say "网关启动失败，见日志尾部"; tail -5 "$L
 api_test() { # ip → 返回 target（整链 /admin/test）
   curl -s -m 3 "http://127.0.0.1:$PORT/admin/test?ip=$1" | python3 -c "import sys,json;print(json.load(sys.stdin).get('target',''))" 2>/dev/null
 }
+api_test_host() { # ip host → 指定接入域名的整链匹配结果
+  curl -s -m 3 "http://127.0.0.1:$PORT/admin/test?ip=$1&host=$2" | python3 -c "import sys,json;print(json.load(sys.stdin).get('target',''))" 2>/dev/null
+}
+stat_val() { # total | 域名 → 统计值
+  curl -s -m 3 "http://127.0.0.1:$PORT/admin/stats" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+k='''$1'''
+if k=='total': print(d['total'])
+else: print(next((t['count'] for t in d['targets'] if t['target']==k),0))" 2>/dev/null
+}
 go_redirect() { # ip [rule] → "状态码 重定向地址"
   local url="http://127.0.0.1:$PORT/admin/go?ip=$1"
   [ -n "${2:-}" ] && url="$url&rule=$2"
@@ -185,6 +196,72 @@ for i in $(seq 1 20); do curl -s -m 1 "http://127.0.0.1:$PORT/healthz" | grep -q
 SEG_ID_2="$(rule_id segment)"
 check "重启前后 segment 规则 ID 一致" "$SEG_ID_1" "$SEG_ID_2"
 check "旧 ID 的测试链接仍可用" "302 $T_S1/" "$(go_redirect 10.0.0.1 "$SEG_ID_2")"
+
+# ================= 7. 接入域名维度（host 隔离） =================
+say ""
+say "—— 7. 接入域名维度（host 隔离，支持 *.example.com 通配）——"
+post_rules '{"default_target":"https://default.example.com","rules":[{"type":"random","ip_cidr":"0.0.0.0/0","host":"abc.example.com","targets":["https://r1.example.com","https://r2.example.com"],"enable":true}]}'
+check "host 不匹配 → 规则跳过走默认" "$T_DEFAULT" "$(api_test_host 8.8.8.8 other.example.com)"
+H1="$(api_test_host 8.8.8.8 abc.example.com)"
+H2="$(api_test_host 8.8.8.8 abc.example.com)"
+check "host 匹配 → 随机分配生效" "ok" "$({ [ "$H1" = "$T_R1" ] || [ "$H1" = "$T_R2" ]; } && echo ok || echo bad)"
+check "同 IP 同 host 粘性一致" "$H1" "$H2"
+post_rules "$(printf "$RULES_TMPL" "$T_DEFAULT" "true")"
+check "恢复标准 fixture" "$T_S2" "$(api_test 10.100.0.1)"
+
+# ================= 8. 流量统计 =================
+say ""
+say "—— 8. 流量统计（仅真实请求计数，XFF 模拟来源 IP）——"
+for i in 1 2; do curl -s -o /dev/null -m 3 -H "X-Forwarded-For: 8.8.4.4" "http://127.0.0.1:$PORT/some-path"; done
+curl -s -o /dev/null -m 3 -H "X-Forwarded-For: 10.0.0.1" "http://127.0.0.1:$PORT/some-path"
+curl -s -o /dev/null -m 3 -H "X-Forwarded-For: 100.64.0.1" "http://127.0.0.1:$PORT/some-path"
+check "总命中 = 4" "4" "$(stat_val total)"
+check "默认目标命中 = 2" "2" "$(stat_val "$T_DEFAULT")"
+check "s1 命中 = 1" "1" "$(stat_val "$T_S1")"
+check "r3 命中 = 1" "1" "$(stat_val "$T_R3")"
+curl -s -m 3 -X POST "http://127.0.0.1:$PORT/admin/stats/reset" > /dev/null
+check "清零后 total = 0" "0" "$(stat_val total)"
+
+check_ge() { # 下限 实际 名称
+  if [ "$2" -ge "$1" ]; then pass "$3（实际 $2 ≥ 下限 $1）"; else fail "$3" "≥$1" "$2"; fi
+}
+
+# ================= 9. 权重分流（随机分类 50/30/20 加权） =================
+say ""
+say "—— 9. 权重分流（随机分类按 50/30/20 加权，IP 仍固定）——"
+curl -s -m 3 -X POST "http://127.0.0.1:$PORT/admin/stats/reset" > /dev/null
+post_rules '{"default_target":"https://default.example.com","rules":[{"type":"random","ip_cidr":"0.0.0.0/0","targets":["https://r1.example.com","https://r2.example.com","https://r3.example.com"],"weights":[50,30,20],"enable":true}]}'
+for i in $(seq 1 60); do
+  wip="$((RANDOM % 200 + 20)).$((RANDOM % 256)).$((RANDOM % 256)).$((RANDOM % 254 + 1))"
+  curl -s -o /dev/null -m 3 "http://127.0.0.1:$PORT/admin/go?ip=$wip&count=1"
+done
+W1="$(stat_val "$T_R1")"; W2="$(stat_val "$T_R2")"; W3="$(stat_val "$T_R3")"
+say "  实测分布：r1=${W1} r2=${W2} r3=${W3} （60 次，期望约 30/18/12）"
+check_ge 15 "$W1" "r1 按权重约 50%"
+check_ge 6  "$W2" "r2 按权重约 30%"
+check_ge 2  "$W3" "r3 按权重约 20%"
+S1="$(api_test 8.8.8.8)"; S2="$(api_test 8.8.8.8)"
+check "加权后同 IP 仍粘性一致" "$S1" "$S2"
+post_rules "$(printf "$RULES_TMPL" "$T_DEFAULT" "true")"
+curl -s -m 3 -X POST "http://127.0.0.1:$PORT/admin/stats/reset" > /dev/null
+check "恢复标准 fixture" "$T_S2" "$(api_test 10.100.0.1)"
+
+# ================= 10. 区域分流（ip2region 归属地关键词匹配） =================
+say ""
+say "—— 10. 区域分流（归属地关键词：广东/北京/美国）——"
+if curl -s -m 3 "http://127.0.0.1:$PORT/healthz" | grep -q '"geo":true'; then
+  post_rules '{"default_target":"https://default.example.com","rules":[{"type":"region","country":"广东","target":"https://gd.example.com","enable":true},{"type":"region","country":"北京","target":"https://bj.example.com","enable":true},{"type":"region","country":"美国","target":"https://us.example.com","enable":true}]}'
+  check "14.215.177.39（广州电信）→ 广东" "https://gd.example.com" "$(api_test 14.215.177.39)"
+  check "202.96.134.33（深圳电信）→ 广东" "https://gd.example.com" "$(api_test 202.96.134.33)"
+  check "61.135.169.121（北京联通）→ 北京" "https://bj.example.com" "$(api_test 61.135.169.121)"
+  check "8.8.8.8（美国）→ 美国" "https://us.example.com" "$(api_test 8.8.8.8)"
+  check "36.152.44.96（江苏，未配置）→ 默认" "$T_DEFAULT" "$(api_test 36.152.44.96)"
+  check "校验：空关键词应 400" "400" "$(curl -s -o /dev/null -w '%{http_code}' -m 3 -X POST http://127.0.0.1:$PORT/admin/rules -H 'Content-Type: application/json' -d '{"default_target":"https://default.example.com","rules":[{"type":"region","country":"","target":"https://x.example.com","enable":true}]}')"
+  post_rules "$(printf "$RULES_TMPL" "$T_DEFAULT" "true")"
+  check "恢复标准 fixture" "$T_S2" "$(api_test 10.100.0.1)"
+else
+  say "  \033[33m[SKIP]\033[0m 网关未加载地理库（geo:false），区域分流用例跳过"
+fi
 
 # ================= 汇总 =================
 say ""
