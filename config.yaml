@@ -1,15 +1,29 @@
 listen: :18080
 default_target: https://chiguashentan.com
 admin_token: ""
+cors_origin: "*"
+log:
+  level: info
+  access: false
+  gin_mode: release
+rate_limit:
+  rps: 0
+  burst: 0
+stats_flush_interval: 30s
+shutdown_timeout: 5s
 trusted_proxies:
-    - 127.0.0.1
-    - ::1
-    - 10.0.0.0/8
-    - 172.16.0.0/12
-    - 192.168.0.0/16
+  - 127.0.0.1
+  - ::1
+  - 10.0.0.0/8
+  - 172.16.0.0/12
+  - 192.168.0.0/16
 redis:
-    addr: 127.0.0.1:6379
-    password: ""
-    db: 0
-    key: ip_gateway:rules
+  addr: 127.0.0.1:6379
+  password: ""
+  db: 0
+  key: ip_gateway:rules
+  dial_timeout: 2s
+  read_timeout: 1s
+  write_timeout: 1s
+  pool_size: 8
 rules: []

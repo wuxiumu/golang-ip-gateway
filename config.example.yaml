@@ -1,0 +1,45 @@
+# 私有化示例配置。复制为 config.yaml 后再改。
+# 不要把真实 admin_token / redis.password 提交进仓库；可用环境变量注入，见 .env.example。
+#
+# 本地与 Docker 示例监听 :18080。
+# 宝塔生产见 doc/04，nginx 反代目标是 127.0.0.1:8080，线上 listen 请改成 :8080。
+
+listen: :18080
+default_target: https://example.com
+admin_token: "" # 生产改为长随机串，或设置环境变量 IPGW_ADMIN_TOKEN
+
+# 管理端跨域。本地开发保持 *；私有化可改成 https://admin.example.com
+cors_origin: "*"
+
+log:
+  level: info    # info | debug
+  access: false  # true 时记录每次 302：access ip= host= target=
+  gin_mode: release # release | debug | test
+
+# 按客户端 IP 的令牌桶。rps 为 0 时关闭，请求路径与未加限流时相同。
+# 开启示例：rps: 50  burst: 100。修改后需要重启进程。
+rate_limit:
+  rps: 0
+  burst: 0
+
+stats_flush_interval: 30s
+shutdown_timeout: 5s
+
+trusted_proxies:
+  - 127.0.0.1
+  - ::1
+  - 10.0.0.0/8
+  - 172.16.0.0/12
+  - 192.168.0.0/16
+
+redis:
+  addr: 127.0.0.1:6379 # Docker Compose 内由 IPGW_REDIS_ADDR=redis:6379 覆盖；留空则纯文件模式
+  password: ""         # 或设置 IPGW_REDIS_PASSWORD
+  db: 0
+  key: ip_gateway:rules
+  dial_timeout: 2s
+  read_timeout: 1s
+  write_timeout: 1s
+  pool_size: 8
+
+rules: []

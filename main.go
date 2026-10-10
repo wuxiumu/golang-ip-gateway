@@ -18,8 +18,9 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"ip-gateway/internal/geo"
-	"ip-gateway/internal/rule"
+	"ip-gateway/internal/ratelimit"
 	"ip-gateway/internal/redisclient"
+	"ip-gateway/internal/rule"
 	"ip-gateway/internal/stats"
 )
 
@@ -45,8 +46,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("load config %s failed: %v", *configPath, err)
 	}
+	rule.ApplyEnv(baseCfg)
+	rule.ApplyDefaults(baseCfg)
 	rule.Set(baseCfg)
 	log.Printf("loaded fallback config from %s, rules=%d", *configPath, len(baseCfg.Rules))
+	log.Printf("runtime listen=%s log_level=%s access=%v gin=%s rate_limit_rps=%g cors=%s",
+		baseCfg.Listen, baseCfg.Log.Level, baseCfg.Log.Access, baseCfg.Log.GinMode, baseCfg.RateLimit.RPS, baseCfg.CORSOrigin)
 
 	// 第二步：尝试用 Redis 规则覆盖内存；失败保留文件兜底，正常启动
 	var rdb *redis.Client
@@ -68,12 +73,23 @@ func main() {
 		log.Printf("redis addr empty, running in file-only mode")
 	}
 
-	gin.SetMode(gin.ReleaseMode)
+	switch baseCfg.Log.GinMode {
+	case "debug":
+		gin.SetMode(gin.DebugMode)
+	case "test":
+		gin.SetMode(gin.TestMode)
+	default:
+		gin.SetMode(gin.ReleaseMode)
+	}
 	r := gin.New()
 	r.Use(gin.Recovery())
-	// CORS：允许本地管理后台跨域直连任意环境（本期不考虑安全限制）
+	// CORS：默认 *，与原先本地管理端直连一致；私有化可改成具体源。
 	r.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
+		origin := "*"
+		if cfg := rule.Get(); cfg != nil && cfg.CORSOrigin != "" {
+			origin = cfg.CORSOrigin
+		}
+		c.Header("Access-Control-Allow-Origin", origin)
 		c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Content-Type, X-Admin-Token")
 		if c.Request.Method == http.MethodOptions {
@@ -82,6 +98,16 @@ func main() {
 		}
 		c.Next()
 	})
+	if lim := ratelimit.New(baseCfg.RateLimit.RPS, baseCfg.RateLimit.Burst); lim.Enabled() {
+		r.Use(func(c *gin.Context) {
+			if !lim.Allow(c.ClientIP()) {
+				c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"msg": "rate limited"})
+				return
+			}
+			c.Next()
+		})
+		log.Printf("rate limit enabled: rps=%g burst=%g per client ip", baseCfg.RateLimit.RPS, baseCfg.RateLimit.Burst)
+	}
 	// 前置 nginx/LB 时必须信任其网段，否则 ClientIP 是代理 IP，分流全错
 	if err := r.SetTrustedProxies(baseCfg.TrustedProxies); err != nil {
 		log.Printf("set trusted proxies warning: %v", err)
@@ -90,9 +116,9 @@ func main() {
 	registerAdmin(r, rdb, *configPath, st)
 	registerGateway(r, st)
 
-	// 定时把统计刷盘（30 秒），进程崩溃最多丢 30 秒数据
+	// 定时把统计刷盘，间隔来自配置（默认 30 秒）
 	go func() {
-		t := time.NewTicker(30 * time.Second)
+		t := time.NewTicker(baseCfg.StatsFlushInterval.D())
 		defer t.Stop()
 		for range t.C {
 			_ = st.Save(configDir)
@@ -114,7 +140,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Printf("shutting down...")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), baseCfg.ShutdownTimeout.D())
 	defer cancel()
 	_ = srv.Shutdown(ctx)
 	_ = st.Save(configDir) // 退出前保存统计
@@ -131,6 +157,9 @@ func registerGateway(r *gin.Engine, st *stats.Stats) {
 		clientIP := net.ParseIP(c.ClientIP())
 		target, _, _ := rule.Match(clientIP, c.Request.Host, cfg)
 		st.Record(target) // 流量统计（仅真实请求，/admin/go 等测试通道不计）
+		if cfg.Log.Access {
+			log.Printf("access ip=%s host=%s target=%s", c.ClientIP(), c.Request.Host, target)
+		}
 		c.Redirect(http.StatusFound, target)
 	})
 }
@@ -140,12 +169,14 @@ func registerAdmin(r *gin.Engine, rdb *redis.Client, configPath string, st *stat
 	r.GET("/healthz", func(c *gin.Context) {
 		cfg := rule.Get()
 		c.JSON(http.StatusOK, gin.H{
-			"status": "ok",
-			"listen": cfg.Listen,
-			"rules":  len(cfg.Rules),
-			"source": cfg.Source,
-			"redis":  cfg.Redis.Addr,
-			"geo":    geo.Loaded(),
+			"status":         "ok",
+			"listen":         cfg.Listen,
+			"rules":          len(cfg.Rules),
+			"source":         cfg.Source,
+			"redis":          cfg.Redis.Addr,
+			"geo":            geo.Loaded(),
+			"log_level":      cfg.Log.Level,
+			"rate_limit_rps": cfg.RateLimit.RPS,
 		})
 	})
 

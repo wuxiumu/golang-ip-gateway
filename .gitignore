@@ -15,3 +15,7 @@ admin-ui/dist/
 .DS_Store
 *.log
 logs/
+
+# 私有化密钥，只提交 *.example
+.env
+config.local.yaml
