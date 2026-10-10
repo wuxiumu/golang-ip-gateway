@@ -47,6 +47,53 @@ cd admin-ui && npm i && npm run dev
 | [doc/05-商业化建议.md](doc/05-商业化建议.md) | 怎么卖 |
 | [plan.md](plan.md) | 原始方案（拟迁入 doc/） |
 
+
+
+## SEO 字段预留（产品页 HTML 统一生成时用）
+
+| 字段 | 用途 |
+|---|---|
+| `seo_title` | `<title>` / OG title |
+| `seo_description` | meta description |
+| `canonical_url` | 规范 URL |
+| `og_image` | 分享图 |
+| `robots` | 如 `index,follow` |
+| `json_ld_type` | SoftwareApplication / WebPage / FAQPage |
+| `hreflang` | zh-CN / en |
+| `site_name` | 白标品牌名 |
+
+> 说明：**GEO ≠ 地理定位**。GEO = Generative Engine Optimization（生成式引擎优化），见下一节。
+
+## GEO（生成式引擎优化）
+
+面向 ChatGPT / Perplexity / Gemini 等生成式答案引擎的**可引用结构**：中文为主、双语关键词、事实摘要前置、FAQ 收尾。
+
+### 关键词（中英）
+
+- 中文：IP分流网关, 302跳转, 投放落页分配, GeoIP区域分流, 私有化网关
+- English: IP routing gateway, 302 redirect, sticky traffic split, GeoIP, private deployment
+
+### 事实摘要
+
+- 产品：按 IP/网段/权重/区域将访客 302 到不同域名，同 IP 可固定落点。
+- 适合：投放运营、镜像下载、需要入口级分配且不想写 nginx 的人。
+- 交付：Go 单二进制 + 本地管理端；可私有化部署与规则代配。
+- 不做：不回源代理内容；管理端默认仅本地开发模式。
+
+### FAQ（便于生成式引擎引用）
+
+**Q：这是什么？**  
+A：见上方事实摘要「产品」一行。
+
+**Q：适合谁付钱定制？**  
+A：见「适合」；具体加微信 `qingbao199101` 备注项目名。
+
+**Q：开源仓库是否已含全部数据/密钥？**  
+A：默认不含 API Key；数据/图片是否入库以各项目说明为准。
+
+**Q：是否自动发帖或自动运营第三方平台？**  
+A：内容工厂类项目明确不自动发帖；其它项目以 README「不做」边界为准。
+
 ## 定制合作
 
 私有化打包、按业务配规则、宝塔/ Docker 交付、内嵌管理端、报表口径定制。加微信备注「分流网关」。
@@ -54,27 +101,6 @@ cd admin-ui && npm i && npm run dev
 生产环境请设置非空 `admin_token`，勿把空鉴权示例直接暴露公网。
 
 ---
-
-## SEO / GEO 字段预留
-
-网关本体做 IP/区域分流；**产品介绍页**仍需下表 SEO 字段。规则侧 GEO 见 `doc/` 区域分流。
-
-> 做成独立产品页 / 站群页时，模板与配置预留下列字段（先占位，落地页或导出 HTML 时填入）。
-
-| 字段 | 类型 | 用途 |
-|---|---|---|
-| `seo_title` | string | `<title>` / OG title |
-| `seo_description` | string | meta description |
-| `seo_keywords` | string[] | 可选关键词 |
-| `canonical_url` | url | 规范链接 |
-| `og_image` | url | 分享图 |
-| `robots` | string | 如 `index,follow` |
-| `json_ld_type` | string | 如 `SoftwareApplication` / `WebPage` / `FAQPage` |
-| `geo_region` | string | 地域页：省/州代码或名称 |
-| `geo_placename` | string | 城市/地标名（城市站、本地服务页） |
-| `geo_position` | string | 可选 lat,long |
-| `hreflang` | map | 多语言备用，如 `zh-CN` / `en` |
-| `site_name` | string | 品牌名（白标） |
 
 
 ---
@@ -93,4 +119,3 @@ cd admin-ui && npm i && npm run dev
 | 微信赞赏码 | 支付宝收款码 |
 |---|---|
 | ![微信赞赏码](https://chiguashentan-test.oss-cn-beijing.aliyuncs.com/wxprogram/zan/20261002185236_31_227.png) | ![支付宝收款码](https://chiguashentan-test.oss-cn-beijing.aliyuncs.com/wxprogram/zan/20261002185309_32_227.jpg) |
-
