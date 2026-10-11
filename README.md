@@ -22,17 +22,62 @@
 
 ## 快速开始
 
+Go 模块路径是 `ip-gateway`，`go.mod` 要求 **Go 1.26**。本地端口以仓库配置为准。
+
+| 进程 | 端口 | 配置位置 |
+|---|---|---|
+| 网关 | **18080** | `config.yaml` 的 `listen: :18080` |
+| 管理端 dev | **6183** | `admin-ui/vite.config.js`，把 `/admin`、`/healthz` 代理到 `http://127.0.0.1:18080` |
+| 回归脚本 | **18099** 起自动选空闲端口 | `scripts/verify.sh` |
+
+宝塔文档和 `deploy/nginx-ip-gateway.conf` 里的 **8080** 是线上 `listen`，和上面的本地 18080 不是同一个端口。
+
 ```bash
-# 需要本机 Go
+# 需要本机 Go 1.26+
 go run . -config config.yaml
-# 默认监听见 config.yaml（本地常为 :18080）
+curl -s http://127.0.0.1:18080/healthz
 
 # 管理端（仅本地开发，不默认部署到服务器）
 cd admin-ui && npm i && npm run dev
+# 打开 http://127.0.0.1:6183
 
-# 回归
+# 最小冒烟（CI 同款，见 .github/workflows/smoke.yml）
+go test ./...
+CGO_ENABLED=0 go build -o ip-gateway .
+
+# 全量回归
 ./scripts/verify.sh
 ```
+
+新环境复制 `config.example.yaml` 为 `config.yaml`。令牌、Redis 密码放 `.env`（从 `.env.example` 复制），`.env` 不入库。
+
+## 配置、日志与限流
+
+规则和监听以 yaml 为准。环境变量只覆盖部署时不想写进文件的项（见 `.env.example`），空值不会覆盖文件。
+
+| 项 | 默认 | 说明 |
+|---|---|---|
+| `log.level` / `IPGW_LOG_LEVEL` | `info` | `debug` 或 `info` |
+| `log.access` / `IPGW_LOG_ACCESS` | `false` | `true` 时记录每次 302（`access ip= host= target=`） |
+| `log.gin_mode` / `IPGW_GIN_MODE` | `release` | `release` / `debug` / `test` |
+| `rate_limit.rps` | `0` | `0` 关闭限流，请求路径与原来一致；大于 0 时按客户端 IP 令牌桶，超限返回 429 |
+| `cors_origin` | `*` | 管理端跨域来源 |
+| `stats_flush_interval` | `30s` | 命中统计落盘间隔 |
+| `shutdown_timeout` | `5s` | SIGTERM 后等待存量请求的时间 |
+| `redis.dial_timeout` 等 | `2s` / `1s` / 池大小 `8` | Redis 客户端超时，未写时与原先硬编码相同 |
+
+改监听、日志、限流、CORS、Redis 连接后需要重启。`/admin/reload` 只热更新规则。管理端保存规则会把当前内存配置回写到 `config.yaml`（含环境变量覆盖后的 `admin_token`），生产令牌不要提交。
+
+## Docker
+
+```bash
+cp config.example.yaml config.yaml   # 已有 config.yaml 可跳过
+cp .env.example .env                 # 按需填写 IPGW_ADMIN_TOKEN 等
+docker compose up --build
+curl -s http://127.0.0.1:18080/healthz
+```
+
+Compose 把宿主机 `18080` 映射到容器内 `18080`，并用 `IPGW_REDIS_ADDR=redis:6379` 覆盖 yaml 里的本机 Redis 地址。Redis 不映射到宿主机。镜像内默认配置来自 `config.example.yaml`，不含令牌。
 
 交叉编译 Linux 与宝塔步骤见 [doc/04-宝塔部署指南.md](doc/04-宝塔部署指南.md)。
 
@@ -101,7 +146,7 @@ A：内容工厂类项目明确不自动发帖；其它项目以 README「不做
 
 ## 定制合作
 
-私有化打包、按业务配规则、宝塔/ Docker 交付、内嵌管理端、报表口径定制。加微信备注「分流网关」。
+私有化打包、按业务配规则、宝塔或本仓库 `docker compose` 交付、内嵌管理端、报表口径定制。加微信备注「分流网关」。
 
 生产环境请设置非空 `admin_token`，勿把空鉴权示例直接暴露公网。
 

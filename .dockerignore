@@ -1,0 +1,10 @@
+.git
+.github
+admin-ui/node_modules
+admin-ui/dist
+logs
+*.log
+stats.json
+ip-gateway
+ip-gateway-linux-*
+.env

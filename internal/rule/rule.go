@@ -74,11 +74,11 @@ func RuleID(r *Rule) string {
 // Rule 分流规则；weight/ua_contains/path_prefix/country 为预留字段，本期不参与匹配，
 // 后续扩展在 Match 中叠加条件即可，不动主流程。
 type Rule struct {
-	ID         string   `json:"id,omitempty" yaml:"id,omitempty"` // 规则稳定 ID，供 /admin/go 单规则测试定位
-	Type       string   `json:"type" yaml:"type"` // basic / random / segment，空视为 basic
+	ID         string   `json:"id,omitempty" yaml:"id,omitempty"`     // 规则稳定 ID，供 /admin/go 单规则测试定位
+	Type       string   `json:"type" yaml:"type"`                     // basic / random / segment，空视为 basic
 	Host       string   `json:"host,omitempty" yaml:"host,omitempty"` // 接入域名（可选）：空=所有域名；支持 *.example.com 通配
 	IPCidr     string   `json:"ip_cidr" yaml:"ip_cidr"`
-	Target     string   `json:"target" yaml:"target"`         // basic 用
+	Target     string   `json:"target" yaml:"target"`                       // basic 用
 	Targets    []string `json:"targets,omitempty" yaml:"targets,omitempty"` // random / segment 用
 	Weights    []int    `json:"weights,omitempty" yaml:"weights,omitempty"` // random 用：与 targets 对齐的权重，全 0/缺省 = 平均
 	Enable     bool     `json:"enable" yaml:"enable"`
@@ -141,22 +141,44 @@ func (r *Rule) Validate() error {
 }
 
 type RedisConfig struct {
-	Addr     string `json:"addr" yaml:"addr"`
-	Password string `json:"password" yaml:"password"`
-	DB       int    `json:"db" yaml:"db"`
-	Key      string `json:"key" yaml:"key"`
+	Addr         string   `json:"addr" yaml:"addr"`
+	Password     string   `json:"-" yaml:"password"` // 不从管理接口回显
+	DB           int      `json:"db" yaml:"db"`
+	Key          string   `json:"key" yaml:"key"`
+	DialTimeout  Duration `json:"-" yaml:"dial_timeout,omitempty"`
+	ReadTimeout  Duration `json:"-" yaml:"read_timeout,omitempty"`
+	WriteTimeout Duration `json:"-" yaml:"write_timeout,omitempty"`
+	PoolSize     int      `json:"-" yaml:"pool_size,omitempty"`
+}
+
+// LogConfig 进程日志。Access 为 false 时请求路径不打访问日志（默认，与原先一致）。
+type LogConfig struct {
+	Level   string `json:"-" yaml:"level,omitempty"`    // info | debug
+	Access  bool   `json:"-" yaml:"access,omitempty"`   // true 时记录每次 302
+	GinMode string `json:"-" yaml:"gin_mode,omitempty"` // release | debug | test
+}
+
+// RateLimitConfig 按客户端 IP 的令牌桶。RPS <= 0 表示关闭。
+type RateLimitConfig struct {
+	RPS   float64 `json:"-" yaml:"rps,omitempty"`
+	Burst float64 `json:"-" yaml:"burst,omitempty"`
 }
 
 // AppConfig 全局配置。Source 标记当前内存规则的来源（file/redis/admin），
 // 仅用于 admin 接口展示，不落盘。
 type AppConfig struct {
-	Listen         string      `json:"listen" yaml:"listen"`
-	DefaultTarget  string      `json:"default_target" yaml:"default_target"`
-	AdminToken     string      `json:"-" yaml:"admin_token"`
-	TrustedProxies []string    `json:"-" yaml:"trusted_proxies"`
-	Redis          RedisConfig `json:"redis" yaml:"redis"`
-	Rules          []Rule      `json:"rules" yaml:"rules"`
-	Source         string      `json:"source,omitempty" yaml:"-"`
+	Listen             string          `json:"listen" yaml:"listen"`
+	DefaultTarget      string          `json:"default_target" yaml:"default_target"`
+	AdminToken         string          `json:"-" yaml:"admin_token"`
+	CORSOrigin         string          `json:"-" yaml:"cors_origin,omitempty"`
+	Log                LogConfig       `json:"-" yaml:"log,omitempty"`
+	RateLimit          RateLimitConfig `json:"-" yaml:"rate_limit,omitempty"`
+	StatsFlushInterval Duration        `json:"-" yaml:"stats_flush_interval,omitempty"`
+	ShutdownTimeout    Duration        `json:"-" yaml:"shutdown_timeout,omitempty"`
+	TrustedProxies     []string        `json:"-" yaml:"trusted_proxies"`
+	Redis              RedisConfig     `json:"redis" yaml:"redis"`
+	Rules              []Rule          `json:"rules" yaml:"rules"`
+	Source             string          `json:"source,omitempty" yaml:"-"`
 }
 
 // 内存配置：请求路径 RLock 读指针，更新时整体替换，无空窗。
@@ -456,9 +478,7 @@ func LoadFromFile(path string) (*AppConfig, error) {
 	if strings.TrimSpace(cfg.DefaultTarget) == "" {
 		return nil, fmt.Errorf("default_target required in %s", path)
 	}
-	if cfg.Listen == "" {
-		cfg.Listen = ":8080"
-	}
+	ApplyDefaults(&cfg)
 	cfg.Source = "file"
 	return &cfg, nil
 }

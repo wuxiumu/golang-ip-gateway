@@ -1,0 +1,40 @@
+# 本地 / 私有化试跑：网关 :18080 + 仅内网可达的 Redis。
+# 先准备配置：cp config.example.yaml config.yaml
+# 令牌和 Redis 密码放 .env（由 .env.example 复制），不要写进镜像。
+# 容器内监听地址来自 config.yaml（示例为 :18080）。改 listen 时要同步改下面的端口右侧和健康检查。
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    expose:
+      - "6379"
+
+  gateway:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - redis
+    ports:
+      - "${IPGW_PUBLISH_PORT:-18080}:18080"
+    environment:
+      IPGW_REDIS_ADDR: ${IPGW_REDIS_ADDR:-redis:6379}
+      IPGW_ADMIN_TOKEN: ${IPGW_ADMIN_TOKEN:-}
+      IPGW_REDIS_PASSWORD: ${IPGW_REDIS_PASSWORD:-}
+      IPGW_LISTEN: ${IPGW_LISTEN:-}
+      IPGW_DEFAULT_TARGET: ${IPGW_DEFAULT_TARGET:-}
+      IPGW_CORS_ORIGIN: ${IPGW_CORS_ORIGIN:-}
+      IPGW_LOG_LEVEL: ${IPGW_LOG_LEVEL:-}
+      IPGW_LOG_ACCESS: ${IPGW_LOG_ACCESS:-}
+      IPGW_GIN_MODE: ${IPGW_GIN_MODE:-}
+      IPGW_RATE_LIMIT_RPS: ${IPGW_RATE_LIMIT_RPS:-}
+      IPGW_RATE_LIMIT_BURST: ${IPGW_RATE_LIMIT_BURST:-}
+    volumes:
+      - ./config.yaml:/app/config.yaml
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:18080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
